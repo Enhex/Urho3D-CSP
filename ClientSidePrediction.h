@@ -1,29 +1,24 @@
 #ifndef CLIENT_SIDE_REDICTION_H
 #define CLIENT_SIDE_REDICTION_H
 
-
-#include <Urho3D/Core/Context.h>
-#include <Urho3D/Core/CoreEvents.h>
-#include <Urho3D/IO/Log.h>
-#include <Urho3D/IO/MemoryBuffer.h>
+#include <Urho3D/Container/HashSet.h>
+#include <Urho3D/Core/Object.h>
 #include <Urho3D/IO/VectorBuffer.h>
-#include <Urho3D/Input/Controls.h>
-#include <Urho3D/Network/Network.h>
-#include <Urho3D/Network/NetworkEvents.h>
-#include <Urho3D/Physics/PhysicsEvents.h>
-#include <Urho3D/Physics/PhysicsWorld.h>
-#include <Urho3D/Scene/LogicComponent.h>
-#include <Urho3D/Scene/Scene.h>
-#include <Urho3D/Scene/SmoothedTransform.h>
 #include <functional>
 #include <unordered_set>
 #include <vector>
 
-using namespace Urho3D;
-
-
 namespace Urho3D
 {
+	class Context;
+	class Serializable;
+	class Controls;
+	class Component;
+	class Scene;
+	class Node;
+	class Connection;
+	class MemoryBuffer;
+
 	/* Client Side Prediction  Message IDs */
 	/* Client -> server */
 	// Custom input message to add update ID and be in sync with the update rate
@@ -32,6 +27,8 @@ namespace Urho3D
 	// Sends a complete snapshot of the world
 	constexpr int MSG_CSP_STATE = 33;
 }
+
+using namespace Urho3D;
 
 /*
 Client side prediction subsystem.
@@ -55,13 +52,13 @@ struct ClientSidePrediction : Object
 	// Fixed timestep length
 	float timestep = 0;
 
-	// Add a node to the client side prediction
+	// Server: Add a node to the client side prediction
 	void add_node(Node* node);
 
 	// Apply a given input locally
-	std::function<void(Controls input, float timestep)> apply_local_input = nullptr;
+	std::function<void(const Controls& input, float timestep)> apply_local_input = nullptr;
 	// Apply a given input to a specific client
-	std::function<void(Controls input, float timestep, Connection* connection)> apply_client_input = nullptr;
+	std::function<void(const Controls& input, float timestep, Connection* connection)> apply_client_input = nullptr;
 
 	// Tags the input with "id" extraData, adds it to the input buffer, and sends it to the server.
 	void add_input(Controls& input);
@@ -96,6 +93,8 @@ protected:
 	void HandleNetworkMessage(StringHash eventType, VariantMap& eventData);
 	// Send state snapshots
 	void HandleRenderUpdate(StringHash eventType, VariantMap& eventData);
+
+	void HandleInterceptNetworkUpdate(StringHash eventType, VariantMap& eventData);
 
 	// Sends the client's input to the server
 	void send_input(Controls& controls);
@@ -137,6 +136,9 @@ protected:
 	void write_network_attributes(Serializable& object, Serializer& dest);
 	// Read all the network attributes
 	void read_network_attributes(Serializable& object, Deserializer& source);
+
+	// Intercept network attributes to avoid replication overriding prediction
+	void set_intercept_network_attributes(Serializable& object);
 
 	// do client-side prediction
 	void predict();

@@ -1,5 +1,19 @@
 #include "ClientSidePrediction.h"
 
+#include <Urho3D/Core/Context.h>
+#include <Urho3D/Core/CoreEvents.h>
+#include <Urho3D/IO/Log.h>
+#include <Urho3D/IO/MemoryBuffer.h>
+#include <Urho3D/IO/VectorBuffer.h>
+#include <Urho3D/Input/Controls.h>
+#include <Urho3D/Network/Network.h>
+#include <Urho3D/Network/NetworkEvents.h>
+#include <Urho3D/Physics/PhysicsEvents.h>
+#include <Urho3D/Physics/PhysicsWorld.h>
+#include <Urho3D/Scene/LogicComponent.h>
+#include <Urho3D/Scene/Scene.h>
+#include <Urho3D/Scene/SceneEvents.h>
+#include <Urho3D/Scene/SmoothedTransform.h>
 
 //
 // Constructor
@@ -12,6 +26,9 @@ Object(context)
 
 	// Send update messages
 	SubscribeToEvent(E_RENDERUPDATE, URHO3D_HANDLER(ClientSidePrediction, HandleRenderUpdate));
+
+	//
+	SubscribeToEvent(E_INTERCEPTNETWORKUPDATE, URHO3D_HANDLER(ClientSidePrediction, HandleInterceptNetworkUpdate));
 }
 
 
@@ -134,6 +151,13 @@ void ClientSidePrediction::HandleRenderUpdate(StringHash eventType, VariantMap& 
 	}
 }
 
+void ClientSidePrediction::HandleInterceptNetworkUpdate(StringHash eventType, VariantMap & eventData)
+{
+	using namespace InterceptNetworkUpdate;
+	auto name = eventData[P_NAME].GetString();
+	int t = 1;
+}
+
 
 void ClientSidePrediction::read_input(Connection* connection, MemoryBuffer& message)
 {
@@ -234,13 +258,11 @@ void ClientSidePrediction::read_scene_state(MemoryBuffer& message)
 
 	// Make sure it's more recent than the previous last ID since we're sending unordered messages
 	// Handle range looping correctly
-	if (id > server_id)
-	{
+	if (id > server_id) {
 		if (new_server_id < server_id)
 			return;
 	}
-	else
-	{
+	else {
 		if (new_server_id > server_id)
 			return;
 	}
@@ -306,6 +328,9 @@ void ClientSidePrediction::read_node(MemoryBuffer& message)
 		auto transform = node->GetComponent<SmoothedTransform>();
 		if (transform)
 			transform->Update(1.0f, 0.0f);
+
+		// intercept updates
+		//set_intercept_network_attributes(*node);
 	}
 
 	// Read user variables
@@ -321,6 +346,56 @@ void ClientSidePrediction::read_node(MemoryBuffer& message)
 	for (; num_components > 0; --num_components)
 		read_component(message, node);
 }
+
+/* Only create nodes, dont update version for debugging
+void ClientSidePrediction::read_node(MemoryBuffer& message)
+{
+	auto network = GetSubsystem<Network>();
+	auto scene = network->GetServerConnection()->GetScene();
+
+	auto node_id = message.ReadUInt();
+	auto node = scene->GetNode(node_id);
+	bool new_node = false;
+
+	// Create the node if it doesn't exist
+	if (!node)
+	{
+		new_node = true;
+		// Add initially to the root level. May be moved as we receive the parent attribute
+		node = scene->CreateChild(node_id, LOCAL);
+		// Create smoothed transform component
+		node->CreateComponent<SmoothedTransform>(LOCAL);
+
+		// Read attributes
+		read_network_attributes(*node, message);
+		// ApplyAttributes() is deliberately skipped, as Node has no attributes that require late applying.
+		// Furthermore it would propagate to components and child nodes, which is not desired in this case
+
+		// Snap the motion smoothing immediately to the end
+		auto transform = node->GetComponent<SmoothedTransform>();
+		if (transform)
+			transform->Update(1.0f, 0.0f);
+
+		// Read user variables
+		unsigned num_vars = message.ReadVLE();
+		for (; num_vars > 0; --num_vars)
+		{
+			auto key = message.ReadStringHash();
+			node->SetVar(key, message.ReadVariant());
+		}
+
+		// Read components
+		unsigned num_components = message.ReadVLE();
+		for (; num_components > 0; --num_components)
+			read_component(message, node);
+	}
+	else
+	{
+		// Remove the node from the unused nodes list
+		unused_nodes.erase(node);
+	}
+}
+*/
 
 
 //
@@ -433,7 +508,7 @@ void ClientSidePrediction::write_network_attributes(Serializable& object, Serial
 	if (!attributes)
 		return;
 
-	auto numAttributes = attributes->Size();
+	const auto numAttributes = attributes->Size();
 	Variant value;
 
 	for (unsigned i = 0; i < numAttributes; ++i)
@@ -455,12 +530,26 @@ void ClientSidePrediction::read_network_attributes(Serializable& object, Deseria
 	if (!attributes)
 		return;
 
-	unsigned numAttributes = attributes->Size();
+	const auto numAttributes = attributes->Size();
 
 	for (unsigned i = 0; i < numAttributes && !source.IsEof(); ++i)
 	{
 		const auto& attr = attributes->At(i);
 		object.OnSetAttribute(attr, source.ReadVariant(attr.type_));
+	}
+}
+
+void ClientSidePrediction::set_intercept_network_attributes(Serializable & object)
+{
+	const auto attributes = object.GetNetworkAttributes();
+	if (!attributes)
+		return;
+
+	const auto numAttributes = attributes->Size();
+
+	for (unsigned i = 0; i < numAttributes; ++i) {
+		const auto& attr = attributes->At(i);
+		object.SetInterceptNetworkUpdate(attr.name_, true);
 	}
 }
 
