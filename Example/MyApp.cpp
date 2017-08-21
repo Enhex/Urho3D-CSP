@@ -32,7 +32,7 @@
 
 
 // UDP port we will use
-static const unsigned short SERVER_PORT = 2345;
+static const unsigned short SERVER_PORT = 2354;
 // Identifier for our custom remote event we use to tell the client which object they control
 static const StringHash E_CLIENTOBJECTID("ClientObjectID");
 // Identifier for the node ID parameter in the event data
