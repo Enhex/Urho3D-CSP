@@ -1,4 +1,4 @@
-#include "ClientSidePrediction.hpp"
+#include "ClientSidePrediction.h"
 
 
 //
@@ -8,10 +8,10 @@ ClientSidePrediction::ClientSidePrediction(Context* context) :
 Object(context)
 {
 	// Receive update messages
-	SubscribeToEvent(E_NETWORKMESSAGE, HANDLER(ClientSidePrediction, HandleNetworkMessage));
+	SubscribeToEvent(E_NETWORKMESSAGE, URHO3D_HANDLER(ClientSidePrediction, HandleNetworkMessage));
 
 	// Send update messages
-	SubscribeToEvent(E_RENDERUPDATE, HANDLER(ClientSidePrediction, HandleRenderUpdate));
+	SubscribeToEvent(E_RENDERUPDATE, URHO3D_HANDLER(ClientSidePrediction, HandleRenderUpdate));
 }
 
 
@@ -21,17 +21,6 @@ Object(context)
 void ClientSidePrediction::RegisterObject(Context* context)
 {
 	context->RegisterFactory<ClientSidePrediction>();
-}
-
-
-//
-// SetUpdateFps
-//
-void ClientSidePrediction::SetUpdateFps(int fps)
-{
-	updateFps_ = Max(fps, 1);
-	updateInterval_ = 1.0f / (float)updateFps_;
-	updateAcc_ = 0.0f;
 }
 
 
@@ -97,7 +86,7 @@ void ClientSidePrediction::HandleNetworkMessage(StringHash eventType, VariantMap
 	auto network = GetSubsystem<Network>();
 	
 	using namespace NetworkMessage;
-	auto message_id = eventData[P_MESSAGEID].GetInt();
+	const auto message_id = eventData[P_MESSAGEID].GetInt();
 	auto connection = static_cast<Connection*>(eventData[P_CONNECTION].GetPtr());
 	MemoryBuffer message(eventData[P_DATA].GetBuffer());
 
@@ -146,16 +135,13 @@ void ClientSidePrediction::HandleRenderUpdate(StringHash eventType, VariantMap& 
 }
 
 
-//
-// read_input
-//
 void ClientSidePrediction::read_input(Connection* connection, MemoryBuffer& message)
 {
 	auto network = GetSubsystem<Network>();
 
 	if (!connection->IsClient())
 	{
-		LOGWARNING("Received unexpected Controls message from server");
+		URHO3D_LOGWARNING("Received unexpected Controls message from server");
 		return;
 	}
 
@@ -362,7 +348,7 @@ void ClientSidePrediction::read_component(MemoryBuffer& message, Node* node)
 	// If was unable to create the component, would desync the message and therefore have to abort
 	if (!component)
 	{
-		LOGERROR("CreateNode message parsing aborted due to unknown component");
+		URHO3D_LOGERROR("CreateNode message parsing aborted due to unknown component");
 		return;
 	}
 

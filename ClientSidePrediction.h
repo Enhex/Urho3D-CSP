@@ -1,23 +1,23 @@
-#ifndef CLIENT_SIDE_REDICTION_HPP
-#define CLIENT_SIDE_REDICTION_HPP
+#ifndef CLIENT_SIDE_REDICTION_H
+#define CLIENT_SIDE_REDICTION_H
 
 
-#include "Context.h"
-#include "Scene.h"
-#include "Controls.h"
-#include "LogicComponent.h"
-#include "Network.h"
-#include "CoreEvents.h"
-#include "NetworkEvents.h"
-#include "PhysicsWorld.h"
-#include "PhysicsEvents.h"
-#include "VectorBuffer.h"
-#include "MemoryBuffer.h"
-#include "SmoothedTransform.h"
-#include "Log.h"
-#include <vector>
-#include <unordered_set>
+#include <Urho3D/Core/Context.h>
+#include <Urho3D/Core/CoreEvents.h>
+#include <Urho3D/IO/Log.h>
+#include <Urho3D/IO/MemoryBuffer.h>
+#include <Urho3D/IO/VectorBuffer.h>
+#include <Urho3D/Input/Controls.h>
+#include <Urho3D/Network/Network.h>
+#include <Urho3D/Network/NetworkEvents.h>
+#include <Urho3D/Physics/PhysicsEvents.h>
+#include <Urho3D/Physics/PhysicsWorld.h>
+#include <Urho3D/Scene/LogicComponent.h>
+#include <Urho3D/Scene/Scene.h>
+#include <Urho3D/Scene/SmoothedTransform.h>
 #include <functional>
+#include <unordered_set>
+#include <vector>
 
 using namespace Urho3D;
 
@@ -27,13 +27,10 @@ namespace Urho3D
 	/* Client Side Prediction  Message IDs */
 	/* Client -> server */
 	// Custom input message to add update ID and be in sync with the update rate
-	static const int MSG_CSP_INPUT = 32;
+	constexpr int MSG_CSP_INPUT = 32;
 	/* Server -> client */
 	// Sends a complete snapshot of the world
-	static const int MSG_CSP_STATE = 33;
-
-
-	static const int DEFAULT_UPDATE_FPS = 30;
+	constexpr int MSG_CSP_STATE = 33;
 }
 
 /*
@@ -43,13 +40,12 @@ Usage:
 Add LOCAL nodes which you want to be predicted.
 Note: Uses the PhysicsWorld Fps as a fixed timestep.
 */
-class ClientSidePrediction : public Object
+struct ClientSidePrediction : Object
 {
-	OBJECT(ClientSidePrediction)
+	URHO3D_OBJECT(ClientSidePrediction, Object)
 
-	typedef unsigned int ID;
+	using ID = unsigned;
 
-public:
 	ClientSidePrediction(Context* context);
 
 	// Register object factory and attributes.
@@ -58,9 +54,6 @@ public:
 
 	// Fixed timestep length
 	float timestep = 0;
-
-	// 
-	void SetUpdateFps(int fps);
 
 	// Add a node to the client side prediction
 	void add_node(Node* node);
@@ -155,13 +148,12 @@ protected:
 	void remove_obsolete_history();
 
 private:
-	// Update FPS
-	int updateFps_ = DEFAULT_UPDATE_FPS;
 	// Update time interval
-	float updateInterval_ = 1.0f / (float)DEFAULT_UPDATE_FPS;
+	//TODO same as timestep?
+	float updateInterval_ = 1.f / 30.f;	// default to 30 FPS
 	// Update time accumulator
 	float updateAcc_ = 0;
 };
 
 
-#endif//CLIENT_SIDE_REDICTION_HPP
+#endif//guard
