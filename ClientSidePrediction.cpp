@@ -46,7 +46,7 @@ void ClientSidePrediction::RegisterObject(Context* context)
 //
 void ClientSidePrediction::add_node(Node* node)
 {
-	scene_nodes[node->GetScene()].push_back(node);
+	scene_snapshots[node->GetScene()].add_node(node);
 }
 
 
@@ -99,9 +99,8 @@ void ClientSidePrediction::send_input(Controls& controls)
 //
 void ClientSidePrediction::HandleNetworkMessage(StringHash eventType, VariantMap& eventData)
 {
-
 	auto network = GetSubsystem<Network>();
-	
+
 	using namespace NetworkMessage;
 	const auto message_id = eventData[P_MESSAGEID].GetInt();
 	auto connection = static_cast<Connection*>(eventData[P_CONNECTION].GetPtr());
@@ -122,7 +121,15 @@ void ClientSidePrediction::HandleNetworkMessage(StringHash eventType, VariantMap
 		switch (message_id)
 		{
 		case MSG_CSP_STATE:
-			read_scene_state(message);
+			// read last input
+			read_last_id(message);
+			// read state snapshot
+			auto scene = network->GetServerConnection()->GetScene();
+			scene_snapshots[scene].read_state(message, scene);
+
+			// Perform client side prediction
+			predict();
+
 			break;
 		}
 	}
@@ -188,6 +195,26 @@ void ClientSidePrediction::read_input(Connection* connection, MemoryBuffer& mess
 }
 
 
+void ClientSidePrediction::read_last_id(MemoryBuffer& message)
+{
+	// Read last input ID
+	auto new_server_id = message.ReadUInt();
+
+	// Make sure it's more recent than the previous last ID since we're sending unordered messages
+	// Handle range looping correctly
+	if (id > server_id) {
+		if (new_server_id < server_id)
+			return;
+	}
+	else {
+		if (new_server_id > server_id)
+			return;
+	}
+
+	server_id = new_server_id;
+}
+
+
 //
 // prepare_state_snapshots
 //
@@ -209,9 +236,16 @@ void ClientSidePrediction::prepare_state_snapshots()
 	for (auto i = network_scenes.Begin(); i != network_scenes.End(); ++i)
 	{
 		auto scene = (*i);
+
+		auto& state_message = scene_states[scene];
 		state_message.Clear();
-		write_scene_state(state_message, scene);
-		scene_states[scene] = state_message;
+
+		// Write placeholder last input ID, which will be set per connection before sending
+		state_message.WriteUInt(0);
+
+		// write state snapshot
+		auto& snapshot = scene_snapshots[scene];
+		snapshot.write_state(state_message, scene);
 	}
 }
 
@@ -244,108 +278,6 @@ void ClientSidePrediction::send_state_update(Connection* connection)
 	connection->SendMessage(MSG_CSP_STATE, false, false, state);
 }
 
-
-//
-// read_scene_state
-//
-void ClientSidePrediction::read_scene_state(MemoryBuffer& message)
-{
-	auto network = GetSubsystem<Network>();
-	auto scene = network->GetServerConnection()->GetScene();
-
-	// Read last input ID
-	auto new_server_id = message.ReadUInt();
-
-	// Make sure it's more recent than the previous last ID since we're sending unordered messages
-	// Handle range looping correctly
-	if (id > server_id) {
-		if (new_server_id < server_id)
-			return;
-	}
-	else {
-		if (new_server_id > server_id)
-			return;
-	}
-
-	server_id = new_server_id;
-
-	// Reset the unused nodes set
-	unused_nodes.clear();
-	for (auto node : scene_nodes[scene])
-		unused_nodes.insert(node);
-
-	// Read number of nodes
-	auto num_nodes = message.ReadVLE();
-
-	// Read nodes
-	for (; num_nodes > 0; --num_nodes)
-		read_node(message);
-
-	// Remove unsued nodes
-	for (auto node : unused_nodes)
-		node->Remove();
-	
-	// Perform client side prediction
-	predict();
-}
-
-
-//
-// read_node
-//
-void ClientSidePrediction::read_node(MemoryBuffer& message)
-{
-	auto network = GetSubsystem<Network>();
-	auto scene = network->GetServerConnection()->GetScene();
-
-	auto node_id = message.ReadUInt();
-	auto node = scene->GetNode(node_id);
-	bool new_node = false;
-
-	// Create the node if it doesn't exist
-	if (!node)
-	{
-		new_node = true;
-		// Add initially to the root level. May be moved as we receive the parent attribute
-		node = scene->CreateChild(node_id, LOCAL);
-		// Create smoothed transform component
-		node->CreateComponent<SmoothedTransform>(LOCAL);
-	}
-	else
-	{
-		// Remove the node from the unused nodes list
-		unused_nodes.erase(node);
-	}
-
-	// Read attributes
-	read_network_attributes(*node, message);
-	// ApplyAttributes() is deliberately skipped, as Node has no attributes that require late applying.
-	// Furthermore it would propagate to components and child nodes, which is not desired in this case
-
-	if (new_node)
-	{
-		// Snap the motion smoothing immediately to the end
-		auto transform = node->GetComponent<SmoothedTransform>();
-		if (transform)
-			transform->Update(1.0f, 0.0f);
-
-		// intercept updates
-		//set_intercept_network_attributes(*node);
-	}
-
-	// Read user variables
-	unsigned num_vars = message.ReadVLE();
-	for (; num_vars > 0; --num_vars)
-	{
-		auto key = message.ReadStringHash();
-		node->SetVar(key, message.ReadVariant());
-	}
-
-	// Read components
-	unsigned num_components = message.ReadVLE();
-	for (; num_components > 0; --num_components)
-		read_component(message, node);
-}
 
 /* Only create nodes, dont update version for debugging
 void ClientSidePrediction::read_node(MemoryBuffer& message)
@@ -398,165 +330,6 @@ void ClientSidePrediction::read_node(MemoryBuffer& message)
 */
 
 
-//
-// read_component
-//
-void ClientSidePrediction::read_component(MemoryBuffer& message, Node* node)
-{
-	auto network = GetSubsystem<Network>();
-	auto scene = network->GetServerConnection()->GetScene();
-
-	// Read component ID
-	auto componentID = message.ReadUInt();
-	// Read component type
-	auto type = message.ReadStringHash();
-
-	// Check if the component by this ID and type already exists in this node
-	auto component = scene->GetComponent(componentID);
-	if (!component || component->GetType() != type || component->GetNode() != node)
-	{
-		if (component)
-			component->Remove();
-		component = node->CreateComponent(type, LOCAL, componentID);
-	}
-
-	// If was unable to create the component, would desync the message and therefore have to abort
-	if (!component)
-	{
-		URHO3D_LOGERROR("CreateNode message parsing aborted due to unknown component");
-		return;
-	}
-
-	// Read attributes and apply
-	read_network_attributes(*component, message);
-	component->ApplyAttributes();
-}
-
-
-//
-// write_scene_state
-//
-void ClientSidePrediction::write_scene_state(VectorBuffer& message, Scene* scene)
-{
-	// Write placeholder last input ID, which will be set per connection before sending
-	message.WriteUInt(0);
-
-	auto& nodes = scene_nodes[scene];
-
-	// Write number of nodes
-	message.WriteVLE(nodes.size());
-
-	// Write nodes
-	for (auto node : nodes)
-		write_node(message, *node);
-}
-
-
-//
-// write_node
-//
-void ClientSidePrediction::write_node(VectorBuffer& message, Node& node)
-{
-	// Write node ID
-	message.WriteUInt(node.GetID());
-
-	// Write attributes
-	write_network_attributes(node, message);
-
-	// Write user variables
-	const auto& vars = node.GetVars();
-	message.WriteVLE(vars.Size());
-	for (auto i = vars.Begin(); i != vars.End(); ++i)
-	{
-		message.WriteStringHash(i->first_);
-		message.WriteVariant(i->second_);
-	}
-
-	// Write number of components
-	message.WriteVLE(node.GetNumComponents());
-
-	// Write components
-	const auto& components = node.GetComponents();
-	for (unsigned i = 0; i < components.Size(); ++i)
-	{
-		auto component = components[i];
-		write_component(message, *component);
-	}
-}
-
-
-//
-// write_component
-//
-void ClientSidePrediction::write_component(VectorBuffer& message, Component& component)
-{
-	// Write ID
-	message.WriteUInt(component.GetID());
-	// Write type
-	message.WriteStringHash(component.GetType());
-	// Write attributes
-	write_network_attributes(component, message);
-}
-
-
-//
-// write_network_attributes
-//
-void ClientSidePrediction::write_network_attributes(Serializable& object, Serializer& dest)
-{
-	const auto attributes = object.GetNetworkAttributes();
-	if (!attributes)
-		return;
-
-	const auto numAttributes = attributes->Size();
-	Variant value;
-
-	for (unsigned i = 0; i < numAttributes; ++i)
-	{
-		const auto& attr = attributes->At(i);
-		value.Clear();
-		object.OnGetAttribute(attr, value);
-		dest.WriteVariantData(value);
-	}
-}
-
-
-//
-// read_network_attributes
-//
-void ClientSidePrediction::read_network_attributes(Serializable& object, Deserializer& source)
-{
-	const auto attributes = object.GetNetworkAttributes();
-	if (!attributes)
-		return;
-
-	const auto numAttributes = attributes->Size();
-
-	for (unsigned i = 0; i < numAttributes && !source.IsEof(); ++i)
-	{
-		const auto& attr = attributes->At(i);
-		object.OnSetAttribute(attr, source.ReadVariant(attr.type_));
-	}
-}
-
-void ClientSidePrediction::set_intercept_network_attributes(Serializable & object)
-{
-	const auto attributes = object.GetNetworkAttributes();
-	if (!attributes)
-		return;
-
-	const auto numAttributes = attributes->Size();
-
-	for (unsigned i = 0; i < numAttributes; ++i) {
-		const auto& attr = attributes->At(i);
-		object.SetInterceptNetworkUpdate(attr.name_, true);
-	}
-}
-
-
-//
-// predict
-//
 void ClientSidePrediction::predict()
 {
 	remove_obsolete_history();
@@ -564,9 +337,6 @@ void ClientSidePrediction::predict()
 }
 
 
-//
-// reapply_inputs
-//
 void ClientSidePrediction::reapply_inputs()
 {
 	for (auto& controls : input_buffer)
@@ -577,9 +347,6 @@ void ClientSidePrediction::reapply_inputs()
 }
 
 
-//
-// remove_obsolete_history
-//
 void ClientSidePrediction::remove_obsolete_history()
 {
 	std::vector<Controls> new_input_buffer;

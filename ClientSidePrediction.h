@@ -7,6 +7,7 @@
 #include <functional>
 #include <unordered_set>
 #include <vector>
+#include "StateSnapshot.h"
 
 namespace Urho3D
 {
@@ -67,14 +68,10 @@ struct ClientSidePrediction : Object
 protected:
 	// Networked scenes
 	HashSet<Scene*> network_scenes;
-	// Client-side predicted nodes
-	HashMap<Scene*, std::vector<Node*>> scene_nodes;
+
 	// State snapshot of each scene
 	HashMap<Scene*, VectorBuffer> scene_states;
-	// Reusable message buffer
-	VectorBuffer state_message;
-	// Reuseable hash set for tracking unused nodes
-	std::unordered_set<Node*> unused_nodes;
+	HashMap<Scene*, StateSnapshot> scene_snapshots;
 	
 	// current client-side update ID
 	ID id = 0;
@@ -101,44 +98,20 @@ protected:
 	// Read input sent from the client and apply it
 	void read_input(Connection* connection, MemoryBuffer& message);
 
+	// read server's last received ID
+	void read_last_id(MemoryBuffer& message);
+
 	// Prepare state snapshot for each networked scene
 	void prepare_state_snapshots();
 	// For each connection send the last received input ID and scene state snapshot
 	void send_state_updates();
 	// Send a state update to a given connection
 	void send_state_update(Connection* connection);
-
 	/*
-	state serialization structure:
+	serialization structure:
 	- Last input ID
-	- num of nodes
-	- for each node
-		- ID (unsigned to include local nodes)
-		- attributes
-		- User variables
-		- num of components
-		- for each component
-			- ID (unsigned)
-			- type
-			- attributes
+	- state snapshot
 	*/
-	// Process scene update received from the server
-	void read_scene_state(MemoryBuffer& message);
-	void read_node(MemoryBuffer& message);
-	void read_component(MemoryBuffer& message, Node* node);
-
-	// Get a complete network state snapshot
-	void write_scene_state(VectorBuffer& message, Scene* scene);
-	void write_node(VectorBuffer& message, Node& node);
-	void write_component(VectorBuffer& message, Component& component);
-
-	// Write all the network attributes
-	void write_network_attributes(Serializable& object, Serializer& dest);
-	// Read all the network attributes
-	void read_network_attributes(Serializable& object, Deserializer& source);
-
-	// Intercept network attributes to avoid replication overriding prediction
-	void set_intercept_network_attributes(Serializable& object);
 
 	// do client-side prediction
 	void predict();

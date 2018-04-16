@@ -341,6 +341,28 @@ void MyApp::MoveCamera()
 	instructionsText_->SetVisible(showInstructions);
 }
 
+Controls MyApp::sample_input()
+{
+	auto ui = GetSubsystem<UI>();
+	auto input = GetSubsystem<Input>();
+
+	Controls controls;
+
+	// Copy mouse yaw
+	controls.yaw_ = yaw_;
+
+	// Only apply WASD controls if there is no focused UI element
+	if (!ui->GetFocusElement())
+	{
+		controls.Set(CTRL_FORWARD, input->GetKeyDown(KEY_W));
+		controls.Set(CTRL_BACK, input->GetKeyDown(KEY_S));
+		controls.Set(CTRL_LEFT, input->GetKeyDown(KEY_A));
+		controls.Set(CTRL_RIGHT, input->GetKeyDown(KEY_D));
+	}
+
+	return controls;
+}
+
 void MyApp::apply_input(Node* ballNode, const Controls& controls)
 {
 	auto body = ballNode->GetComponent<RigidBody>();
@@ -434,26 +456,15 @@ void MyApp::HandlePhysicsPreStep(StringHash eventType, VariantMap & eventData)
 
 	// Client: collect controls
 	if (serverConnection)
-	{
-		auto ui = GetSubsystem<UI>();
-		auto input = GetSubsystem<Input>();
-		Controls controls;
-
-		// Copy mouse yaw
-		controls.yaw_ = yaw_;
-
-		// Only apply WASD controls if there is no focused UI element
-		if (!ui->GetFocusElement())
-		{
-			controls.Set(CTRL_FORWARD, input->GetKeyDown(KEY_W));
-			controls.Set(CTRL_BACK, input->GetKeyDown(KEY_S));
-			controls.Set(CTRL_LEFT, input->GetKeyDown(KEY_A));
-			controls.Set(CTRL_RIGHT, input->GetKeyDown(KEY_D));
-		}
+	{		
+		auto controls = sample_input();
 
 		// predict locally
-		if(clientObjectID_)
-			apply_input(scene->GetNode(clientObjectID_), controls);
+		if (clientObjectID_) {
+			auto ballNode = scene->GetNode(clientObjectID_);
+			if(ballNode != nullptr)
+				apply_input(ballNode, controls);
+		}
 
 		// Set the controls using the CSP system
 		csp->add_input(controls);
@@ -482,7 +493,7 @@ void MyApp::HandleConnect(StringHash eventType, VariantMap & eventData)
 	if (address.Empty())
 		address = "localhost"; // Use localhost to connect if nothing else specified
 
-							   // Connect to server, specify scene to use as a client for replication
+	// Connect to server, specify scene to use as a client for replication
 	clientObjectID_ = 0; // Reset own object ID from possible previous connection
 	network->Connect(address, SERVER_PORT, scene);
 

@@ -2,6 +2,7 @@
 #define MY_APP_H
 
 #include <Urho3D/Engine/Application.h>
+#undef TRANSPARENT
 
 struct ClientSidePrediction;
 namespace Urho3D {
@@ -69,6 +70,8 @@ protected:
 	Node* CreateControllableObject();
 	/// Read input and move the camera.
 	void MoveCamera();
+
+	Controls sample_input();
 
 	void apply_input(Node* ballNode, const Controls& controls);
 	void apply_input(Connection* connection, const Controls& controls);
