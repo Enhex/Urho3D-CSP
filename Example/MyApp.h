@@ -4,7 +4,6 @@
 #include <Urho3D/Engine/Application.h>
 #undef TRANSPARENT
 
-struct ClientSidePrediction;
 namespace Urho3D {
 	class Node;
 	class Scene;
@@ -25,8 +24,6 @@ const float TOUCH_SENSITIVITY = 2.0f;
 struct MyApp : Application
 {
 	MyApp(Context* context);
-
-	SharedPtr<ClientSidePrediction> csp;
 
 	SharedPtr<Scene> scene;
     SharedPtr<Node> cameraNode;

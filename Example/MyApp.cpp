@@ -1,6 +1,7 @@
 #include "MyApp.h"
 
-#include "../ClientSidePrediction.h"
+#include "../CSP_Client.h"
+#include "../CSP_Server.h"
 #include <Urho3D/Core/CoreEvents.h>
 #include <Urho3D/Engine/Engine.h>
 #include <Urho3D/Graphics/Camera.h>
@@ -51,10 +52,8 @@ static const unsigned CTRL_RIGHT = 8;
 MyApp::MyApp(Context* context) :
 Application(context)
 {
-	ClientSidePrediction::RegisterObject(context);
-
-	csp = MakeShared<ClientSidePrediction>(context);
-	context_->RegisterSubsystem(csp);
+	CSP_Client::RegisterObject(context);
+	CSP_Server::RegisterObject(context);
 }
 
 
@@ -147,17 +146,6 @@ void MyApp::CreateScene()
 
 	// Set an initial position for the camera scene node above the plane
 	cameraNode->SetPosition(Vector3(0.0f, 5.0f, 0.0f));
-
-	// setup client side prediction
-	csp->timestep = 1.f / physicsWorld->GetFps();
-	// local input
-	csp->apply_local_input = [&](Controls input, float timestep) {
-		apply_input(scene->GetNode(clientObjectID_), input);
-	};
-	// client input
-	csp->apply_client_input = [&](Controls input, float timestep, Connection* connection) {
-		apply_input(connection, input);
-	};
 }
 
 void MyApp::SetupViewport()
@@ -295,6 +283,7 @@ Node * MyApp::CreateControllableObject()
 	light->SetRange(3.0f);
 	light->SetColor(Color(0.5f + (Rand() & 1) * 0.5f, 0.5f + (Rand() & 1) * 0.5f, 0.5f + (Rand() & 1) * 0.5f));
 
+	auto csp = scene->GetComponent<CSP_Server>();
 	csp->add_node(ballNode);
 
 	return ballNode;
@@ -467,6 +456,7 @@ void MyApp::HandlePhysicsPreStep(StringHash eventType, VariantMap & eventData)
 		}
 
 		// Set the controls using the CSP system
+		auto csp = scene->GetComponent<CSP_Client>();
 		csp->add_input(controls);
 		//serverConnection->SetControls(controls);
 
@@ -492,6 +482,14 @@ void MyApp::HandleConnect(StringHash eventType, VariantMap & eventData)
 	String address = textEdit_->GetText().Trimmed();
 	if (address.Empty())
 		address = "localhost"; // Use localhost to connect if nothing else specified
+
+	// setup client side prediction
+	auto csp = scene->CreateComponent<CSP_Client>(LOCAL);
+	csp->timestep = 1.f / scene->GetComponent<PhysicsWorld>()->GetFps();
+	// local input
+	csp->apply_local_input = [&](Controls input, float timestep) {
+		apply_input(scene->GetNode(clientObjectID_), input);
+	};
 
 	// Connect to server, specify scene to use as a client for replication
 	clientObjectID_ = 0; // Reset own object ID from possible previous connection
@@ -526,6 +524,14 @@ void MyApp::HandleStartServer(StringHash eventType, VariantMap & eventData)
 {
 	auto network = GetSubsystem<Network>();
 	network->StartServer(SERVER_PORT);
+
+	// setup client side prediction
+	auto csp = scene->CreateComponent<CSP_Server>(LOCAL);
+	csp->timestep = 1.f / scene->GetComponent<PhysicsWorld>()->GetFps();
+	// client input
+	csp->apply_client_input = [&](Controls input, float timestep, Connection* connection) {
+		apply_input(connection, input);
+	};
 
 	UpdateButtons();
 }
