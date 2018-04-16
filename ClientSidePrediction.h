@@ -1,13 +1,13 @@
-#ifndef CLIENT_SIDE_REDICTION_H
-#define CLIENT_SIDE_REDICTION_H
+#pragma once
 
+#include "CSP_messages.h"
+#include "StateSnapshot.h"
 #include <Urho3D/Container/HashSet.h>
 #include <Urho3D/Core/Object.h>
 #include <Urho3D/IO/VectorBuffer.h>
 #include <functional>
 #include <unordered_set>
 #include <vector>
-#include "StateSnapshot.h"
 
 namespace Urho3D
 {
@@ -19,14 +19,6 @@ namespace Urho3D
 	class Node;
 	class Connection;
 	class MemoryBuffer;
-
-	/* Client Side Prediction  Message IDs */
-	/* Client -> server */
-	// Custom input message to add update ID and be in sync with the update rate
-	constexpr int MSG_CSP_INPUT = 32;
-	/* Server -> client */
-	// Sends a complete snapshot of the world
-	constexpr int MSG_CSP_STATE = 33;
 }
 
 using namespace Urho3D;
@@ -129,6 +121,3 @@ private:
 	// Update time accumulator
 	float updateAcc_ = 0;
 };
-
-
-#endif//guard
