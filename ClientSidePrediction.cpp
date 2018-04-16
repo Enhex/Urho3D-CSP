@@ -349,31 +349,23 @@ void ClientSidePrediction::reapply_inputs()
 
 void ClientSidePrediction::remove_obsolete_history()
 {
-	std::vector<Controls> new_input_buffer;
-
-	for (size_t i = 0; i < input_buffer.size(); ++i)
-	{
-		auto& controls = input_buffer[i];
-		unsigned update_id = controls.extraData_["id"].GetUInt();
-		bool remove = false;
-
-		// Handle value range looping correctly
-		if (id > server_id)
-		{
-			if (update_id <= server_id ||
-				update_id > id)
-				remove = true;
-		}
-		else
-		{
-			if (update_id >= server_id ||
-				update_id < id)
-				remove = true;
-		}
-
-		if (!remove)
-			new_input_buffer.push_back(controls);
-	}
-
-	input_buffer = new_input_buffer;
+	input_buffer.erase(
+		std::remove_if(input_buffer.begin(), input_buffer.end(), [&](Controls& controls) {
+			unsigned update_id = controls.extraData_["id"].GetUInt();
+			// Handle value range looping correctly
+			if (id >= server_id)
+			{
+				if (update_id <= server_id ||
+					update_id > id)
+					return true;
+			}
+			else
+			{
+				if (update_id >= server_id ||
+					update_id < id)
+					return true;
+			}
+			return false;
+		}),
+		input_buffer.end());
 }
