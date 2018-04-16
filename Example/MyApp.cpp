@@ -3,6 +3,7 @@
 #include "../CSP_Client.h"
 #include "../CSP_Server.h"
 #include <Urho3D/Core/CoreEvents.h>
+#include <Urho3D/Engine/Console.h>
 #include <Urho3D/Engine/DebugHud.h>
 #include <Urho3D/Engine/Engine.h>
 #include <Urho3D/Graphics/Camera.h>
@@ -198,6 +199,16 @@ void MyApp::CreateUI()
 	root->SetDefaultStyle(uiStyle);
 
 	auto graphics = GetSubsystem<Graphics>();
+
+	// Create console
+	auto console = engine_->CreateConsole();
+	console->SetDefaultStyle(uiStyle);
+	console->GetBackground()->SetOpacity(0.8f);
+
+	// Create debug HUD
+	auto debugHud = engine_->CreateDebugHud();
+	debugHud->SetDefaultStyle(uiStyle);
+	debugHud->SetProfilerInterval(1.f / scene->GetComponent<PhysicsWorld>()->GetFps());
 
 	// Construct the instructions text element
 	instructionsText_ = ui->GetRoot()->CreateChild<Text>();

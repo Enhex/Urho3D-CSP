@@ -37,6 +37,8 @@ void CSP_Client::add_input(Controls & input)
 
 	// Send to the server
 	send_input(input);
+
+	GetSubsystem<DebugHud>()->SetAppStats("add_input() input_buffer.size(): ", input_buffer.size());
 }
 
 void CSP_Client::HandleNetworkMessage(StringHash eventType, VariantMap& eventData)
@@ -117,6 +119,8 @@ void CSP_Client::predict()
 
 void CSP_Client::reapply_inputs()
 {
+	GetSubsystem<DebugHud>()->SetAppStats("reapply_inputs() input_buffer.size(): ", input_buffer.size());
+
 	for (auto& controls : input_buffer)
 	{
 		if (unsigned(controls.extraData_["id"].GetUInt()) > server_id)
