@@ -3,6 +3,7 @@
 #include "../CSP_Client.h"
 #include "../CSP_Server.h"
 #include <Urho3D/Core/CoreEvents.h>
+#include <Urho3D/Engine/DebugHud.h>
 #include <Urho3D/Engine/Engine.h>
 #include <Urho3D/Graphics/Camera.h>
 #include <Urho3D/Graphics/Graphics.h>
@@ -354,41 +355,50 @@ Controls MyApp::sample_input()
 
 void MyApp::apply_input(Node* ballNode, const Controls& controls)
 {
-	auto body = ballNode->GetComponent<RigidBody>();
-
 	// Torque is relative to the forward vector
 	Quaternion rotation(0.0f, controls.yaw_, 0.0f);
 
-	/*
-	constexpr float MOVE_TORQUE = 3.0f;
+	//#define CSP_TEST_USE_PHYSICS // used for testing to make sure problems aren't related to the physics
+#ifdef CSP_TEST_USE_PHYSICS
+	auto* body = ballNode->GetComponent<RigidBody>();
+
+	const float MOVE_TORQUE = 3.0f;
+
+	auto change_func = [&](Vector3 force) {
+		//#define CSP_TEST_USE_VELOCITY
+#ifdef CSP_TEST_USE_VELOCITY
+		body->ApplyForce(force);
+#else
+		body->ApplyTorque(force);
+#endif
+	};
 
 	// Movement torque is applied before each simulation step, which happen at 60 FPS. This makes the simulation
 	// independent from rendering framerate. We could also apply forces (which would enable in-air control),
 	// but want to emphasize that it's a ball which should only control its motion by rolling along the ground
 	if (controls.buttons_ & CTRL_FORWARD)
-		body->ApplyTorque(rotation * Vector3::RIGHT * MOVE_TORQUE);
+		change_func(rotation * Vector3::RIGHT * MOVE_TORQUE);
 	if (controls.buttons_ & CTRL_BACK)
-		body->ApplyTorque(rotation * Vector3::LEFT * MOVE_TORQUE);
+		change_func(rotation * Vector3::LEFT * MOVE_TORQUE);
 	if (controls.buttons_ & CTRL_LEFT)
-		body->ApplyTorque(rotation * Vector3::FORWARD * MOVE_TORQUE);
+		change_func(rotation * Vector3::FORWARD * MOVE_TORQUE);
 	if (controls.buttons_ & CTRL_RIGHT)
-		body->ApplyTorque(rotation * Vector3::BACK * MOVE_TORQUE);
-	*/
-
-
-	constexpr float MOVE_TORQUE = 1.f / 30.f;
+		change_func(rotation * Vector3::BACK * MOVE_TORQUE);
+#else
+	const float move_distance = 2.f / scene->GetComponent<PhysicsWorld>()->GetFps();
 
 	// Movement torque is applied before each simulation step, which happen at 60 FPS. This makes the simulation
 	// independent from rendering framerate. We could also apply forces (which would enable in-air control),
 	// but want to emphasize that it's a ball which should only control its motion by rolling along the ground
 	if (controls.buttons_ & CTRL_FORWARD)
-		ballNode->SetPosition(ballNode->GetPosition() + Vector3::RIGHT * MOVE_TORQUE);
+		ballNode->SetPosition(ballNode->GetPosition() + Vector3::RIGHT * move_distance);
 	if (controls.buttons_ & CTRL_BACK)
-		ballNode->SetPosition(ballNode->GetPosition() + Vector3::LEFT * MOVE_TORQUE);
+		ballNode->SetPosition(ballNode->GetPosition() + Vector3::LEFT * move_distance);
 	if (controls.buttons_ & CTRL_LEFT)
-		ballNode->SetPosition(ballNode->GetPosition() + Vector3::FORWARD * MOVE_TORQUE);
+		ballNode->SetPosition(ballNode->GetPosition() + Vector3::FORWARD * move_distance);
 	if (controls.buttons_ & CTRL_RIGHT)
-		ballNode->SetPosition(ballNode->GetPosition() + Vector3::BACK * MOVE_TORQUE);
+		ballNode->SetPosition(ballNode->GetPosition() + Vector3::BACK * move_distance);
+#endif
 }
 
 void MyApp::apply_input(Connection* connection, const Controls& controls)
@@ -587,4 +597,8 @@ void MyApp::HandleKeyDown(StringHash eventType, VariantMap& eventData)
 	int key = eventData[P_KEY].GetInt();
 	if (key == KEY_ESCAPE && GetPlatform() != "Web")
 		engine_->Exit();
+
+	// Toggle debug HUD with F2
+	if (key == KEY_F2)
+		GetSubsystem<DebugHud>()->Toggle(DEBUGHUD_SHOW_STATS);
 }

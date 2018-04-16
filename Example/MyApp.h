@@ -1,5 +1,4 @@
-#ifndef MY_APP_H
-#define MY_APP_H
+#pragma once
 
 #include <Urho3D/Engine/Application.h>
 #undef TRANSPARENT
@@ -97,6 +96,3 @@ protected:
 
 	void HandleKeyDown(StringHash eventType, VariantMap& eventData);
 };
-
-
-#endif//MY_APP_H
