@@ -7,6 +7,7 @@
 #include <Urho3D/Engine/DebugHud.h>
 #include <Urho3D/Engine/Engine.h>
 #include <Urho3D/Graphics/Camera.h>
+#include <Urho3D/Graphics/DebugRenderer.h>
 #include <Urho3D/Graphics/Graphics.h>
 #include <Urho3D/Graphics/Light.h>
 #include <Urho3D/Graphics/Material.h>
@@ -15,6 +16,7 @@
 #include <Urho3D/Graphics/Renderer.h>
 #include <Urho3D/Graphics/StaticModel.h>
 #include <Urho3D/Graphics/Zone.h>
+#include <Urho3D/IO/Log.h>
 #include <Urho3D/Input/Input.h>
 #include <Urho3D/Input/InputEvents.h>
 #include <Urho3D/Network/Connection.h>
@@ -94,12 +96,17 @@ void MyApp::CreateScene()
 {
 	scene = MakeShared<Scene>(context_);
 
-	ResourceCache* cache = GetSubsystem<ResourceCache>();
+	auto cache = GetSubsystem<ResourceCache>();
+
+	scene->CreateComponent<DebugRenderer>(LOCAL);
 
 	// Create octree and physics world with default settings. Create them as local so that they are not needlessly replicated
 	// when a client connects
 	scene->CreateComponent<Octree>(LOCAL);
 	auto physicsWorld = scene->CreateComponent<PhysicsWorld>(LOCAL);
+	physicsWorld->SetInterpolation(false); // needed for determinism
+
+	physicsWorld->SetFps(10);
 
 	// All static scene content and the camera are also created as local, so that they are unaffected by scene replication and are
 	// not removed from the client upon connection. Create a Zone component first for ambient lighting & fog control.
@@ -274,7 +281,7 @@ Node * MyApp::CreateControllableObject()
 
 	// Create the scene node & visual representation. This will be a replicated object
 	auto ballNode = scene->CreateChild("Ball", LOCAL);
-	ballNode->SetPosition({ Random(40.0f) - 20.0f, 5.0f, Random(40.0f) - 20.0f });
+	ballNode->SetPosition({ Random(40.0f) - 20.0f, 2.0f, Random(40.0f) - 20.0f });
 	ballNode->SetScale(0.5f);
 	auto ballObject = ballNode->CreateComponent<StaticModel>();
 	ballObject->SetModel(cache->GetResource<Model>("Models/Sphere.mdl"));
@@ -369,7 +376,7 @@ void MyApp::apply_input(Node* ballNode, const Controls& controls)
 	// Torque is relative to the forward vector
 	Quaternion rotation(0.0f, controls.yaw_, 0.0f);
 
-	//#define CSP_TEST_USE_PHYSICS // used for testing to make sure problems aren't related to the physics
+#define CSP_TEST_USE_PHYSICS // used for testing to make sure problems aren't related to the physics
 #ifdef CSP_TEST_USE_PHYSICS
 	auto* body = ballNode->GetComponent<RigidBody>();
 
@@ -466,29 +473,53 @@ void MyApp::HandlePhysicsPreStep(StringHash eventType, VariantMap & eventData)
 
 	// Client: collect controls
 	if (serverConnection)
-	{		
-		auto controls = sample_input();
-
-		// predict locally
-		if (clientObjectID_) {
-			auto ballNode = scene->GetNode(clientObjectID_);
-			if(ballNode != nullptr)
-				apply_input(ballNode, controls);
-		}
-
-		// Set the controls using the CSP system
+	{
 		auto csp = scene->GetComponent<CSP_Client>();
-		csp->add_input(controls);
-		//serverConnection->SetControls(controls);
 
-		// In case the server wants to do position-based interest management using the NetworkPriority components, we should also
-		// tell it our observer (camera) position. In this sample it is not in use, but eg. the NinjaSnowWar game uses it
-		serverConnection->SetPosition(cameraNode->GetPosition());
+		if (csp->prediction_controls != nullptr)
+		{
+			URHO3D_LOGDEBUG("PhysicsPreStep predict");
+
+			if (clientObjectID_) {
+				auto ballNode = scene->GetNode(clientObjectID_);
+				if (ballNode != nullptr)
+					apply_input(ballNode, *csp->prediction_controls);
+			}
+		}
+		else
+		{
+			URHO3D_LOGDEBUG("PhysicsPreStep sample");
+
+			auto controls = sample_input();
+
+			// predict locally
+			if (clientObjectID_) {
+				auto ballNode = scene->GetNode(clientObjectID_);
+				if (ballNode != nullptr)
+					apply_input(ballNode, controls);
+			}
+
+			// Set the controls using the CSP system
+			csp->add_input(controls);
+			//serverConnection->SetControls(controls);
+
+			// In case the server wants to do position-based interest management using the NetworkPriority components, we should also
+			// tell it our observer (camera) position. In this sample it is not in use, but eg. the NinjaSnowWar game uses it
+			serverConnection->SetPosition(cameraNode->GetPosition());
+		}
 	}
-	// Server: apply controls to client objects
-	/*else if (network->IsServerRunning()) {
+	//Server: apply controls to client objects
+	else if (network->IsServerRunning()) {
+		URHO3D_LOGDEBUG("apply clients' controls");
+		auto csp = scene->GetComponent<CSP_Server>();
+
 		const auto& connections = network->GetClientConnections();
-	}*/
+		for (const auto& connection : connections) {
+			auto& controls = csp->client_inputs[connection];
+			apply_input(connection, controls);
+			csp->client_input_IDs[connection] = controls.extraData_["id"].GetUInt();
+		}
+	}
 }
 
 void MyApp::HandlePostUpdate(StringHash eventType, VariantMap & eventData)
@@ -507,6 +538,7 @@ void MyApp::HandleConnect(StringHash eventType, VariantMap & eventData)
 	// setup client side prediction
 	auto csp = scene->CreateComponent<CSP_Client>(LOCAL);
 	csp->timestep = 1.f / scene->GetComponent<PhysicsWorld>()->GetFps();
+
 	// local input
 	csp->apply_local_input = [&](Controls input, float timestep) {
 		apply_input(scene->GetNode(clientObjectID_), input);
@@ -549,6 +581,9 @@ void MyApp::HandleStartServer(StringHash eventType, VariantMap & eventData)
 	// setup client side prediction
 	auto csp = scene->CreateComponent<CSP_Server>(LOCAL);
 	csp->timestep = 1.f / scene->GetComponent<PhysicsWorld>()->GetFps();
+
+	csp->updateInterval_ = 1.f;//debugging
+
 	// client input
 	csp->apply_client_input = [&](Controls input, float timestep, Connection* connection) {
 		apply_input(connection, input);
@@ -609,7 +644,11 @@ void MyApp::HandleKeyDown(StringHash eventType, VariantMap& eventData)
 	if (key == KEY_ESCAPE && GetPlatform() != "Web")
 		engine_->Exit();
 
-	// Toggle debug HUD with F2
+	// Toggle console
+	if (key == KEY_F1)
+		GetSubsystem<Console>()->Toggle();
+
+	// Toggle debug HUD
 	if (key == KEY_F2)
 		GetSubsystem<DebugHud>()->Toggle(DEBUGHUD_SHOW_STATS);
 }

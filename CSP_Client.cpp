@@ -3,6 +3,7 @@
 #include <Urho3D/Core/Context.h>
 #include <Urho3D/Core/CoreEvents.h>
 #include <Urho3D/Engine/DebugHud.h>
+#include <Urho3D/IO/Log.h>
 #include <Urho3D/IO/MemoryBuffer.h>
 #include <Urho3D/Input/Controls.h>
 #include <Urho3D/Network/Network.h>
@@ -55,6 +56,7 @@ void CSP_Client::HandleNetworkMessage(StringHash eventType, VariantMap& eventDat
 		switch (message_id)
 		{
 		case MSG_CSP_STATE:
+			URHO3D_LOGDEBUG("MSG_CSP_STATE");
 			// read last input
 			read_last_id(message);
 			// read state snapshot
@@ -89,7 +91,8 @@ void CSP_Client::send_input(Controls & controls)
 	if (sendMode_ >= OPSM_POSITION_ROTATION)
 	input_message.WritePackedQuaternion(rotation_);*/
 
-	server_connection->SendMessage(MSG_CSP_INPUT, false, false, input_message);
+	//server_connection->SendMessage(MSG_CSP_INPUT, false, false, input_message);
+	server_connection->SendMessage(MSG_CSP_INPUT, true, true, input_message);
 }
 
 void CSP_Client::read_last_id(MemoryBuffer & message)
@@ -109,11 +112,14 @@ void CSP_Client::read_last_id(MemoryBuffer & message)
 	}
 
 	server_id = new_server_id;
+	URHO3D_LOGDEBUG("server_id: " + String(server_id));
 }
 
 void CSP_Client::predict()
 {
+	URHO3D_LOGDEBUG("remove_obsolete_history");
 	remove_obsolete_history();
+	URHO3D_LOGDEBUG("reapply_inputs");
 	reapply_inputs();
 }
 
@@ -121,11 +127,20 @@ void CSP_Client::reapply_inputs()
 {
 	GetSubsystem<DebugHud>()->SetAppStats("reapply_inputs() input_buffer.size(): ", input_buffer.size());
 
+	auto physicsWorld = GetScene()->GetComponent<PhysicsWorld>();
+
 	for (auto& controls : input_buffer)
 	{
-		if (unsigned(controls.extraData_["id"].GetUInt()) > server_id)
-			apply_local_input(controls, timestep);
+		prediction_controls = &controls;
+
+		if (unsigned(controls.extraData_["id"].GetUInt()) > server_id) {
+			URHO3D_LOGDEBUG("reapply id: " + String(controls.extraData_["id"].GetUInt()));
+			//apply_local_input(controls, timestep);
+			physicsWorld->Update(timestep);
+		}
 	}
+
+	prediction_controls = nullptr;
 }
 
 void CSP_Client::remove_obsolete_history()

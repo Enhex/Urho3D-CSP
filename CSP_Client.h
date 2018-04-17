@@ -37,6 +37,7 @@ struct CSP_Client : Component
 	// Fixed timestep length
 	float timestep = 0;
 
+	Controls* prediction_controls = nullptr;
 
 	// Apply a given input locally
 	std::function<void(const Controls& input, float timestep)> apply_local_input = nullptr;

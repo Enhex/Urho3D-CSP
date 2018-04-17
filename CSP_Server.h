@@ -41,6 +41,11 @@ struct CSP_Server : Component
 	float timestep = 0;
 
 
+	// Client input ID map
+	HashMap<Connection*, ID> client_input_IDs;
+	HashMap<Connection*, Controls> client_inputs;
+
+
 	// Add a node to the client side prediction
 	void add_node(Node* node);
 
@@ -56,9 +61,8 @@ protected:
 	HashMap<Scene*, VectorBuffer> scene_states;
 	HashMap<Scene*, StateSnapshot> scene_snapshots;
 
-	// Client input ID map
-	HashMap<Connection*, ID> client_input_IDs;
-
+	// for debugging
+	unsigned snapshots_sent = 0;
 
 	// Handle custom network messages
 	void HandleNetworkMessage(StringHash eventType, VariantMap& eventData);
@@ -83,8 +87,9 @@ protected:
 
 private:
 	// Update time interval
+	// Update time accumulator
+	float updateAcc_ = 0;
+public:
 	//TODO same as timestep?
 	float updateInterval_ = 1.f / 30.f;	// default to 30 FPS
-										// Update time accumulator
-	float updateAcc_ = 0;
 };

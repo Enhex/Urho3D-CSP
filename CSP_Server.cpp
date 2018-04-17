@@ -45,6 +45,7 @@ void CSP_Server::HandleNetworkMessage(StringHash eventType, VariantMap & eventDa
 		switch (message_id)
 		{
 		case MSG_CSP_INPUT:
+			URHO3D_LOGDEBUG("MSG_CSP_INPUT");
 			read_input(connection, message);
 			break;
 		}
@@ -86,9 +87,12 @@ void CSP_Server::read_input(Connection * connection, MemoryBuffer & message)
 	newControls.pitch_ = message.ReadFloat();
 	newControls.extraData_ = message.ReadVariantMap();
 
-	client_input_IDs[connection] = newControls.extraData_["id"].GetUInt();
+	if(newControls.extraData_["id"].GetUInt() > client_inputs[connection].extraData_["id"].GetUInt())
+		client_inputs[connection] = newControls;
 
-	apply_client_input(newControls, timestep, connection);
+	// testing applying input in PreStep
+	//client_input_IDs[connection] = newControls.extraData_["id"].GetUInt();
+	//apply_client_input(newControls, timestep, connection);
 
 	// No access, and currently no use
 	//// Client may or may not send observer position & rotation for interest management
@@ -126,6 +130,8 @@ void CSP_Server::prepare_state_snapshots()
 		// write state snapshot
 		auto& snapshot = scene_snapshots[scene];
 		snapshot.write_state(state_message, scene);
+
+		GetSubsystem<DebugHud>()->SetAppStats("snapshots_sent: ", ++snapshots_sent);
 	}
 }
 
