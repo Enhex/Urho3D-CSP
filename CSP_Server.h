@@ -50,9 +50,6 @@ struct CSP_Server : Component
 	// Add a node to the client side prediction
 	void add_node(Node* node);
 
-	// Apply a given input to a specific client
-	std::function<void(const Controls& input, float timestep, Connection* connection)> apply_client_input = nullptr;
-
 
 protected:
 	// Networked scenes

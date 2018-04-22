@@ -53,9 +53,6 @@ static const unsigned CTRL_LEFT = 4;
 static const unsigned CTRL_RIGHT = 8;
 
 
-//
-// Constructor
-//
 MyApp::MyApp(Context* context) :
 Application(context)
 {
@@ -64,9 +61,6 @@ Application(context)
 }
 
 
-//
-// Setup
-//
 void MyApp::Setup()
 {
 	engineParameters_["WindowWidth"] = 800;
@@ -75,9 +69,6 @@ void MyApp::Setup()
 }
 
 
-//
-// Start
-//
 void MyApp::Start()
 {
 	auto cache = GetSubsystem<ResourceCache>();
@@ -291,7 +282,7 @@ Node * MyApp::CreateControllableObject()
 	ballObject->SetMaterial(cache->GetResource<Material>("Materials/StoneSmall.xml"));
 
 	// Create the physics components
-	auto body = ballNode->CreateComponent<RigidBody>();
+	auto body = ballNode->CreateComponent<RigidBody>(LOCAL);
 	body->SetMass(1.0f);
 	body->SetFriction(1.0f);
 	// In addition to friction, use motion damping so that the ball can not accelerate limitlessly
@@ -588,11 +579,6 @@ void MyApp::HandleStartServer(StringHash eventType, VariantMap & eventData)
 	csp->updateInterval_ = 1.f;//debugging
 #endif
 
-	// client input
-	csp->apply_client_input = [&](Controls input, float timestep, Connection* connection) {
-		apply_input(connection, input);
-	};
-
 	UpdateButtons();
 }
 
@@ -637,9 +623,6 @@ void MyApp::HandleClientObjectID(StringHash eventType, VariantMap & eventData)
 	clientObjectID_ = eventData[P_ID].GetUInt();
 }
 
-//
-// HandleKeyDown
-//
 void MyApp::HandleKeyDown(StringHash eventType, VariantMap& eventData)
 {
 	using namespace KeyDown;
