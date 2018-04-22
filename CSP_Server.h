@@ -4,6 +4,7 @@
 #include "CSP_messages.h"
 #include "StateSnapshot.h"
 #include <Urho3D/Scene/Component.h>
+#include <queue>
 #include <vector>
 
 namespace Urho3D
@@ -43,7 +44,7 @@ struct CSP_Server : Component
 
 	// Client input ID map
 	HashMap<Connection*, ID> client_input_IDs;
-	HashMap<Connection*, Controls> client_inputs;
+	HashMap<Connection*, std::queue<Controls>> client_inputs;//TODO if using queue, use a getter
 
 
 	// Add a node to the client side prediction

@@ -39,9 +39,6 @@ struct CSP_Client : Component
 
 	Controls* prediction_controls = nullptr;
 
-	// Apply a given input locally
-	std::function<void(const Controls& input, float timestep)> apply_local_input = nullptr;
-
 	// Tags the input with "id" extraData, adds it to the input buffer, and sends it to the server.
 	void add_input(Controls& input);
 	

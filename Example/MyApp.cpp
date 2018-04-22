@@ -36,6 +36,9 @@
 #include <Urho3D/UI/UIEvents.h>
 
 
+//#define CSP_DEBUG
+
+
 // UDP port we will use
 static const unsigned short SERVER_PORT = 2354;
 // Identifier for our custom remote event we use to tell the client which object they control
@@ -105,9 +108,9 @@ void MyApp::CreateScene()
 	scene->CreateComponent<Octree>(LOCAL);
 	auto physicsWorld = scene->CreateComponent<PhysicsWorld>(LOCAL);
 	physicsWorld->SetInterpolation(false); // needed for determinism
-
+#ifdef CSP_DEBUG
 	physicsWorld->SetFps(10);
-
+#endif
 	// All static scene content and the camera are also created as local, so that they are unaffected by scene replication and are
 	// not removed from the client upon connection. Create a Zone component first for ambient lighting & fog control.
 	auto zoneNode = scene->CreateChild("Zone", LOCAL);
@@ -514,10 +517,15 @@ void MyApp::HandlePhysicsPreStep(StringHash eventType, VariantMap & eventData)
 		auto csp = scene->GetComponent<CSP_Server>();
 
 		const auto& connections = network->GetClientConnections();
-		for (const auto& connection : connections) {
-			auto& controls = csp->client_inputs[connection];
+		for (const auto& connection : connections)
+		{
+			if (csp->client_inputs[connection].empty())
+				continue;
+
+			auto& controls = csp->client_inputs[connection].front();
 			apply_input(connection, controls);
 			csp->client_input_IDs[connection] = controls.extraData_["id"].GetUInt();
+			csp->client_inputs[connection].pop();
 		}
 	}
 }
@@ -538,11 +546,6 @@ void MyApp::HandleConnect(StringHash eventType, VariantMap & eventData)
 	// setup client side prediction
 	auto csp = scene->CreateComponent<CSP_Client>(LOCAL);
 	csp->timestep = 1.f / scene->GetComponent<PhysicsWorld>()->GetFps();
-
-	// local input
-	csp->apply_local_input = [&](Controls input, float timestep) {
-		apply_input(scene->GetNode(clientObjectID_), input);
-	};
 
 	// Connect to server, specify scene to use as a client for replication
 	clientObjectID_ = 0; // Reset own object ID from possible previous connection
@@ -581,8 +584,9 @@ void MyApp::HandleStartServer(StringHash eventType, VariantMap & eventData)
 	// setup client side prediction
 	auto csp = scene->CreateComponent<CSP_Server>(LOCAL);
 	csp->timestep = 1.f / scene->GetComponent<PhysicsWorld>()->GetFps();
-
+#ifdef CSP_DEBUG
 	csp->updateInterval_ = 1.f;//debugging
+#endif
 
 	// client input
 	csp->apply_client_input = [&](Controls input, float timestep, Connection* connection) {

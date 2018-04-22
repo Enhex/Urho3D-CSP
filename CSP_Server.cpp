@@ -87,8 +87,10 @@ void CSP_Server::read_input(Connection * connection, MemoryBuffer & message)
 	newControls.pitch_ = message.ReadFloat();
 	newControls.extraData_ = message.ReadVariantMap();
 
-	if(newControls.extraData_["id"].GetUInt() > client_inputs[connection].extraData_["id"].GetUInt())
-		client_inputs[connection] = newControls;
+	if (client_inputs[connection].empty() ||
+		newControls.extraData_["id"].GetUInt() > client_inputs[connection].back().extraData_["id"].GetUInt()) {
+		client_inputs[connection].push(newControls);
+	}
 
 	// testing applying input in PreStep
 	//client_input_IDs[connection] = newControls.extraData_["id"].GetUInt();
