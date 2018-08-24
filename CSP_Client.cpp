@@ -16,7 +16,7 @@
 #include <algorithm>
 
 CSP_Client::CSP_Client(Context * context) :
-	Component(context)
+	Object(context)
 {
 	// Receive update messages
 	SubscribeToEvent(E_NETWORKMESSAGE, URHO3D_HANDLER(CSP_Client, HandleNetworkMessage));
@@ -127,7 +127,9 @@ void CSP_Client::reapply_inputs()
 {
 	GetSubsystem<DebugHud>()->SetAppStats("reapply_inputs() input_buffer.size(): ", input_buffer.size());
 
-	auto physicsWorld = GetScene()->GetComponent<PhysicsWorld>();
+	auto scene = GetSubsystem<Network>()->GetServerConnection()->GetScene();
+
+	auto physicsWorld = scene->GetComponent<PhysicsWorld>();
 
 	for (auto& controls : input_buffer)
 	{

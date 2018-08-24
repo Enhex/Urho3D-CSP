@@ -2,6 +2,7 @@
 
 #include <Urho3D/Engine/Application.h>
 #undef TRANSPARENT
+#include "../CSP_Client.h"
 
 namespace Urho3D {
 	class Node;
@@ -30,6 +31,8 @@ struct MyApp : Application
 	float yaw_ = 0.f;
 	/// Camera pitch angle.
 	float pitch_ = 0.f;
+
+	CSP_Client csp_client;
 
 	void Setup();
 	void Start() override;

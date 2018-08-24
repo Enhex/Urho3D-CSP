@@ -1,6 +1,5 @@
 #include "MyApp.h"
 
-#include "../CSP_Client.h"
 #include "../CSP_Server.h"
 #include <Urho3D/Core/CoreEvents.h>
 #include <Urho3D/Engine/Console.h>
@@ -54,7 +53,8 @@ static const unsigned CTRL_RIGHT = 8;
 
 
 MyApp::MyApp(Context* context) :
-Application(context)
+Application(context),
+csp_client(context)
 {
 	CSP_Client::RegisterObject(context);
 	CSP_Server::RegisterObject(context);
@@ -468,16 +468,14 @@ void MyApp::HandlePhysicsPreStep(StringHash eventType, VariantMap & eventData)
 	// Client: collect controls
 	if (serverConnection)
 	{
-		auto csp = scene->GetComponent<CSP_Client>();
-
-		if (csp->prediction_controls != nullptr)
+		if (csp_client.prediction_controls != nullptr)
 		{
 			URHO3D_LOGDEBUG("PhysicsPreStep predict");
 
 			if (clientObjectID_) {
 				auto ballNode = scene->GetNode(clientObjectID_);
 				if (ballNode != nullptr)
-					apply_input(ballNode, *csp->prediction_controls);
+					apply_input(ballNode, *csp_client.prediction_controls);
 			}
 		}
 		else
@@ -494,7 +492,7 @@ void MyApp::HandlePhysicsPreStep(StringHash eventType, VariantMap & eventData)
 			}
 
 			// Set the controls using the CSP system
-			csp->add_input(controls);
+			csp_client.add_input(controls);
 			//serverConnection->SetControls(controls);
 
 			// In case the server wants to do position-based interest management using the NetworkPriority components, we should also
@@ -535,8 +533,7 @@ void MyApp::HandleConnect(StringHash eventType, VariantMap & eventData)
 		address = "localhost"; // Use localhost to connect if nothing else specified
 
 	// setup client side prediction
-	auto csp = scene->CreateComponent<CSP_Client>(LOCAL);
-	csp->timestep = 1.f / scene->GetComponent<PhysicsWorld>()->GetFps();
+	csp_client.timestep = 1.f / scene->GetComponent<PhysicsWorld>()->GetFps();
 
 	// Connect to server, specify scene to use as a client for replication
 	clientObjectID_ = 0; // Reset own object ID from possible previous connection

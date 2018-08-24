@@ -2,7 +2,7 @@
 
 #include "CSP_messages.h"
 #include "StateSnapshot.h"
-#include <Urho3D/Scene/Component.h>
+#include <Urho3D/Core/Object.h>
 #include <vector>
 
 namespace Urho3D
@@ -22,9 +22,9 @@ Client side prediction client.
 - sends input to server
 - receive state snapshot from server and run prediction
 */
-struct CSP_Client : Component
+struct CSP_Client : Object
 {
-	URHO3D_OBJECT(CSP_Client, Component);
+	URHO3D_OBJECT(CSP_Client, Object);
 
 	CSP_Client(Context* context);
 
