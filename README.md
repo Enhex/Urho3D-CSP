@@ -10,6 +10,7 @@ It's also needed for other interactions which aren't directly trigged by input.
 
 # Instructions
 There are few things you need to do to use the subsystem:
+- Disable PhysicsWorld's interpolation for deterministic simulation.
 - Set the input timestep. Most likely to be the physics simulation FPS.
 - Set std::function to a function that applies input locally to the client/server.
 - Set std::function to a function that applies input provided by a client connection.
